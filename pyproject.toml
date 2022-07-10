@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "ultralight_hiking"
+version = "0.1.0"
+description = ""
+authors = ["Moritz Boos <m.boos@eyeo.com>"]
+
+[tool.poetry.dependencies]
+python = ">3.8,<3.11"
+numpy = "^1.23.1"
+scipy = "^1.8.1"
+praw = "^7.6.0"
+matplotlib = "^3.5.2"
+seaborn = "^0.11.2"
+pandas = "^1.4.3"
+ipykernel = "^6.15.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+stubs = "^1.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
