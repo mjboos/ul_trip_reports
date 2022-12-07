@@ -3,6 +3,7 @@ import pandas as pd
 from typing import List, Optional, Callable, Mapping, Generator, Dict
 from bs4.element import Tag
 from functools import partial
+import json
 
 
 @dataclass(frozen=True)
@@ -13,36 +14,22 @@ class Item:
     weight_g: float
     quantity: float
 
-
-def get_lp_items(
-    lp_link: str,
-    category_type="ul",
-    category_class="lpItems lpDataTable",
-    parser: str = "html.parser",
-) -> pd.DataFrame:
-    import requests
-    from bs4 import BeautifulSoup
-
-    page = requests.get(lp_link)
-    if page.status_code == 400:  # bad url or list is gone
-        return None
-    soup = BeautifulSoup(page.content, features=parser)
-    categories = [
-        parse_category(category)
-        for category in soup.find_all(category_type, {"class": category_class})
-    ]
-    return categories_to_df(categories)
-
-
-def categories_to_df(categories: List[dict]) -> pd.DataFrame:
-    dfs = []
-    for category in categories:
-        df = pd.DataFrame([asdict(item) for item in category["items"]])
-        dfs.append(df.assign(category=category["category"]))
-    return pd.concat(dfs, ignore_index=True)
+    def toJSON(self) -> str:
+        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True)
 
 
 convert_to_gram = {"lb": 453.59, "oz": 28.35, "g": 1, "kg": 1000}
+
+
+def generic_extract_item_property(
+    item: Tag, class_name: str, conversion_func: Callable = str, html_type: str = "span"
+):
+    try:
+        content_list = item.find_next(html_type, {"class": class_name}).contents
+        content = next(iterate_nested_content(content_list), None)
+        return conversion_func(content) if content else content
+    except AttributeError:  # empty item/this element is missing
+        return None
 
 
 def extract_weight_in_gram(
@@ -55,17 +42,6 @@ def extract_weight_in_gram(
     )
     weight = generic_extract_item_property(item, weight_class, conversion_func=float)
     return convert_to_gram[unit] * weight
-
-
-def generic_extract_item_property(
-    item: Tag, class_name: str, conversion_func: Callable = str, html_type: str = "span"
-):
-    try:
-        content_list = item.find_next(html_type, {"class": class_name}).contents
-        content = next(iterate_nested_content(content_list), None)
-        return conversion_func(content) if content else content
-    except AttributeError:  # empty item/this element is missing
-        return None
 
 
 generic_extract_spans: Dict[str, Callable] = {
@@ -98,7 +74,9 @@ def parse_item(
     )
 
 
-def parse_category(category_bs: Tag, item_css_sel: str = "li[class^=lpItem]"):
+def parse_category(
+    category_bs: Tag, item_css_sel: str = "li[class^=lpItem]", asdict=True
+):
     try:
         category_name = (
             category_bs.find_next("h2", {"class": "lpCategoryName"}).contents[0].strip()
@@ -107,8 +85,48 @@ def parse_category(category_bs: Tag, item_css_sel: str = "li[class^=lpItem]"):
         category_name = ""
     return {
         "category": category_name,
-        "items": [parse_item(item) for item in category_bs.select(item_css_sel)],
+        "items": [
+            parse_item(item).__dict__ if asdict else parse_item(item)
+            for item in category_bs.select(item_css_sel)
+        ],
     }
+
+
+def extract_lp_categories(
+    lp_link: str,
+    category_type="ul",
+    category_class="lpItems lpDataTable",
+    parser: str = "html.parser",
+    asdict: bool = True,
+):
+    import requests
+    from bs4 import BeautifulSoup
+
+    page = requests.get(lp_link)
+    if page.status_code == 400:  # bad url or list is gone
+        return None
+    soup = BeautifulSoup(page.content, features=parser)
+
+    categories = [
+        parse_category(category, asdict=asdict)
+        for category in soup.find_all(category_type, {"class": category_class})
+    ]
+    return categories
+
+
+def serialize_lp_content(lp_link: str, **kwargs) -> Dict:
+    return {
+        "url": lp_link,
+        "categories": extract_lp_categories(lp_link=lp_link, asdict=True, **kwargs),
+    }
+
+
+def categories_to_df(categories: List[dict]) -> pd.DataFrame:
+    dfs = []
+    for category in categories:
+        df = pd.DataFrame([asdict(item) for item in category["items"]])
+        dfs.append(df.assign(category=category["category"]))
+    return pd.concat(dfs, ignore_index=True)
 
 
 def iterate_nested_content(contents: list) -> Generator[str, None, None]:
