@@ -1,10 +1,12 @@
 import pandas as pd
-from typing import Optional, Iterator, Dict, Tuple, List
+from typing import Iterator, Dict, Tuple, List
 from praw.models.reddit.submission import Submission
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from ultralight_hiking.parsing import serialize_lp_content
 import praw
+
+from psaw import PushshiftAPI
 import json
 
 
@@ -46,19 +48,20 @@ def crawl_trip_reports(
     user_agent: str,
     client_secret: str,
     client_id: str,
-    date: Optional[str] = None,
+    after: datetime | None = None,
+    before: datetime | None = None,
     max_cache: int = 100,
 ) -> List[Submission]:
     r = praw.Reddit(
         user_agent=user_agent, client_secret=client_secret, client_id=client_id
     )
-    from psaw import PushshiftAPI
-
+    if after is None:
+        after = datetime.today()
+    if before is None:
+        before = datetime.today() + timedelta(days=1)
     api = PushshiftAPI(r)
-    if date is None:
-        date = datetime.today().strftime("%Y-%m-%d")
     gen = api.search_submissions(
-        title="trip report", subreddit="ultralight", after=date
+        title="trip report", subreddit="ultralight", after=int(after.timestamp()), before=int(before.timestamp())
     )
     submissions = []
     for c in gen:
