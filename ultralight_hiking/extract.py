@@ -44,12 +44,29 @@ def extract_and_aggregate_submissions(
     return reports, [cnt for subl in lp_contents for cnt in subl]
 
 
+def get_submissions(
+    api: PushshiftAPI,
+    after: int,
+    before: int,
+    subreddit: str = "ultralight",
+    search_kw: str = "trip report",
+    max_cache: int = 100,
+) -> Iterator[Submission]:
+    gen = api.search_submissions(
+        title=search_kw, subreddit=subreddit, after=after, before=before
+    )
+    for i, c in enumerate(gen):
+        yield c
+        if i >= max_cache:
+            break
+
+
 def crawl_trip_reports(
     user_agent: str,
     client_secret: str,
     client_id: str,
-    after: datetime | None = None,
-    before: datetime | None = None,
+    after: datetime | None | int = None,
+    before: datetime | None | int = None,
     max_cache: int = 100,
 ) -> List[Submission]:
     r = praw.Reddit(
@@ -57,19 +74,23 @@ def crawl_trip_reports(
     )
     if after is None:
         after = datetime.today()
+    if isinstance(after, datetime):
+        after = int(after.timestamp())
     if before is None:
         before = datetime.today() + timedelta(days=1)
+    if isinstance(before, datetime):
+        before = int(before.timestamp())
     api = PushshiftAPI(r)
-    gen = api.search_submissions(
-        title="trip report", subreddit="ultralight", after=int(after.timestamp()), before=int(before.timestamp())
+    submissions = list(
+        get_submissions(
+            api,
+            after,
+            before,
+            subreddit="ultralight",
+            search_kw="trip report",
+            max_cache=max_cache,
+        )
     )
-    submissions = []
-    for c in gen:
-        submissions.append(c)
-
-        # Omit this test to actually return all results. Wouldn't recommend it though: could take a while, but you do you.
-        if len(submissions) >= max_cache:
-            break
     return submissions
 
 
