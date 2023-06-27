@@ -44,19 +44,19 @@ def extract_and_aggregate_submissions(
     return reports, [cnt for subl in lp_contents for cnt in subl]
 
 
+# TODO: get all submissions (not only kw)
 def get_submissions(
-    api: PushshiftAPI,
-    after: int,
-    before: int,
+    reddit_obj: praw.reddit.Reddit,
+    after: datetime,
+    before: datetime,
     subreddit: str = "ultralight",
     search_kw: str = "trip report",
     max_cache: int = 100,
 ) -> Iterator[Submission]:
-    gen = api.search_submissions(
-        title=search_kw, subreddit=subreddit, after=after, before=before
-    )
+    gen = reddit_obj.subreddit(subreddit).search(search_kw, limit=None)
     for i, c in enumerate(gen):
-        yield c
+        if after < pd.to_datetime(c.created_utc, unit="s") < before:
+            yield c
         if i >= max_cache:
             break
 
