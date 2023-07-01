@@ -5,8 +5,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from ultralight_hiking.parsing import serialize_lp_content
 import praw
-
-from psaw import PushshiftAPI
+from pathlib import Path
 import json
 
 
@@ -87,25 +86,27 @@ def crawl_trip_reports(
         before = datetime.now()
     if isinstance(before, datetime):
         before = int(before.timestamp())
-    return get_submissions(
-        reddit,
-        after,
-        before,
-        subreddit="ultralight",
-        search_kw="trip report",
-        max_cache=max_cache,
-        time_filter=time_filter,
+    return list(
+        get_submissions(
+            reddit,
+            after,
+            before,
+            subreddit="ultralight",
+            search_kw="trip report",
+            max_cache=max_cache,
+            time_filter=time_filter,
+        )
     )
 
 
-def write_jsonl(filename: str, data) -> None:
+def write_jsonl(filename: str | Path, data) -> None:
     with open(filename, "w+") as fl:
         json.dump(data, fl)
 
 
 def group_submissions_by_day(
-    submissions: Iterator[Submission],
-) -> Iterator[Tuple[datetime, Iterator[Submission]]]:
+    submissions: list[Submission],
+) -> list[Tuple[datetime, list[Submission]]]:
     from collections import defaultdict
 
     submissions_by_day = defaultdict(list)
@@ -114,5 +115,4 @@ def group_submissions_by_day(
         submissions_by_day[
             datetime.fromtimestamp(submission.created_utc).date()
         ].append(submission)
-    for day, submissions in submissions_by_day.items():
-        yield day, submissions
+    return [(day, submissions) for day, submissions in submissions_by_day.items()]
