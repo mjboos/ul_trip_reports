@@ -51,13 +51,13 @@ def get_submissions(
     before: datetime,
     subreddit: str = "ultralight",
     search_kw: str = "trip report",
-    max_cache: int = 100,
+    max_cache: int | None = 100,
 ) -> Iterator[Submission]:
     gen = reddit_obj.subreddit(subreddit).search(search_kw, limit=None)
     for i, c in enumerate(gen):
         if after < pd.to_datetime(c.created_utc, unit="s") < before:
             yield c
-        if i >= max_cache:
+        if max_cache and i >= max_cache:
             break
 
 
