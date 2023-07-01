@@ -47,15 +47,18 @@ def extract_and_aggregate_submissions(
 # TODO: get all submissions (not only kw)
 def get_submissions(
     reddit_obj: praw.reddit.Reddit,
-    after: datetime,
-    before: datetime,
+    after: int,
+    before: int,
     subreddit: str = "ultralight",
     search_kw: str = "trip report",
     max_cache: int | None = 100,
+    time_filter: str = "all",
 ) -> Iterator[Submission]:
-    gen = reddit_obj.subreddit(subreddit).search(search_kw, limit=None)
+    gen = reddit_obj.subreddit(subreddit).search(
+        search_kw, limit=None, time_filter=time_filter
+    )
     for i, c in enumerate(gen):
-        if after < pd.to_datetime(c.created_utc, unit="s") < before:
+        if after < c.created_utc < before:
             yield c
         if max_cache and i >= max_cache:
             break
@@ -67,33 +70,49 @@ def crawl_trip_reports(
     client_id: str,
     after: datetime | None | int = None,
     before: datetime | None | int = None,
-    max_cache: int = 100,
-) -> List[Submission]:
-    r = praw.Reddit(
+    max_cache: int | None = 100,
+    time_filter: str = "all",
+) -> Iterator[Submission]:
+    reddit = praw.Reddit(
         user_agent=user_agent, client_secret=client_secret, client_id=client_id
     )
     if after is None:
-        after = datetime.today()
+        after = datetime.now() - timedelta(hours=24)
+        if before is None:
+            # limit time_filter
+            time_filter = "day"
     if isinstance(after, datetime):
         after = int(after.timestamp())
     if before is None:
-        before = datetime.today() + timedelta(days=1)
+        before = datetime.now()
     if isinstance(before, datetime):
         before = int(before.timestamp())
-    api = PushshiftAPI(r)
-    submissions = list(
-        get_submissions(
-            api,
-            after,
-            before,
-            subreddit="ultralight",
-            search_kw="trip report",
-            max_cache=max_cache,
-        )
+    return get_submissions(
+        reddit,
+        after,
+        before,
+        subreddit="ultralight",
+        search_kw="trip report",
+        max_cache=max_cache,
+        time_filter=time_filter,
     )
-    return submissions
 
 
 def write_jsonl(filename: str, data) -> None:
     with open(filename, "w+") as fl:
         json.dump(data, fl)
+
+
+def group_submissions_by_day(
+    submissions: Iterator[Submission],
+) -> Iterator[Tuple[datetime, Iterator[Submission]]]:
+    from collections import defaultdict
+
+    submissions_by_day = defaultdict(list)
+
+    for submission in submissions:
+        submissions_by_day[
+            datetime.fromtimestamp(submission.created_utc).date()
+        ].append(submission)
+    for day, submissions in submissions_by_day.items():
+        yield day, submissions
