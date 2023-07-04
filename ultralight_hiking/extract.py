@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Iterator, Dict, Tuple, List
 from praw.models.reddit.submission import Submission
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from ultralight_hiking.parsing import serialize_lp_content
 import praw
 from pathlib import Path
@@ -71,7 +71,7 @@ def crawl_trip_reports(
     before: datetime | None | int = None,
     max_cache: int | None = 100,
     time_filter: str = "all",
-) -> Iterator[Submission]:
+) -> List[Submission]:
     reddit = praw.Reddit(
         user_agent=user_agent, client_secret=client_secret, client_id=client_id
     )
@@ -106,7 +106,7 @@ def write_jsonl(filename: str | Path, data) -> None:
 
 def group_submissions_by_day(
     submissions: list[Submission],
-) -> list[Tuple[datetime, list[Submission]]]:
+) -> list[Tuple[date, list[Submission]]]:
     from collections import defaultdict
 
     submissions_by_day = defaultdict(list)
@@ -115,4 +115,5 @@ def group_submissions_by_day(
         submissions_by_day[
             datetime.fromtimestamp(submission.created_utc).date()
         ].append(submission)
-    return [(day, submissions) for day, submissions in submissions_by_day.items()]
+    return [
+        (day, submissions) for day, submissions in submissions_by_day.items()]
